@@ -13,6 +13,7 @@ import {
   getRefreshToken,
   updateAccessToken,
 } from './auth';
+import { getTenantSlug } from './tenant';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -71,6 +72,9 @@ export async function api<T = unknown>(
   const buildHeaders = (token: string | null): HeadersInit => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token && !options.anonymous) h['Authorization'] = `Bearer ${token}`;
+    // Tenant para requests públicos (login/register/landing). En requests
+    // autenticados el backend usa el JWT, pero mandarlo igual es inofensivo.
+    h['X-Tenant-Id'] = getTenantSlug();
     return h;
   };
 

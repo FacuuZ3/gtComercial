@@ -10,7 +10,7 @@
  *  - JwtAuthGuard como guard global (las rutas públicas se marcan con @Public()).
  */
 
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -29,6 +29,7 @@ import { ClubInfoModule } from './club-info/club-info.module';
 import { HealthModule } from './health/health.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
+import { TenantMiddleware } from './common/tenancy/tenant.middleware';
 
 @Module({
   imports: [
@@ -63,4 +64,13 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * Aplica el TenantMiddleware a TODAS las rutas. Abre el scope de
+   * AsyncLocalStorage con el tenant resuelto (subdominio/header) antes de
+   * que corran guards, controllers y services.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

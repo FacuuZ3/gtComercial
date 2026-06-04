@@ -33,10 +33,13 @@ const tomorrowAt = (hour: number, minute = 0): Date => {
   return d;
 };
 
+const TENANT_ID = '99999999-9999-9999-9999-999999999999';
+
 const user: AuthUser = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'test@test.local',
   role: Role.USER,
+  tenantId: TENANT_ID,
 };
 
 const activeCourt = {
@@ -54,6 +57,7 @@ interface PrismaMock {
   };
   court: {
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
   };
   $queryRaw: jest.Mock;
   $transaction: jest.Mock;
@@ -64,10 +68,18 @@ const buildPrismaMock = (): PrismaMock => {
     reservation: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
+      // Conteo de reservas activas del usuario (regla de cupo). Por defecto 0.
+      count: jest.fn().mockResolvedValue(0),
     },
     court: {
-      findUnique: jest.fn().mockResolvedValue(activeCourt),
+      // El código scopea por tenant con findFirst.
+      findFirst: jest.fn().mockResolvedValue(activeCourt),
+    },
+    recurringReservation: {
+      // Por defecto, ningún turno fijo en conflicto.
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     $queryRaw: jest.fn().mockResolvedValue([]), // por defecto, no hay solapamiento
   };
@@ -86,6 +98,7 @@ const buildPrismaMock = (): PrismaMock => {
     },
     court: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
     },
     $queryRaw: jest.fn(),
     // Simula prisma.$transaction: ejecuta el callback con el tx mock.
@@ -136,7 +149,7 @@ describe('ReservationsService.create', () => {
   });
 
   it('lanza NotFound si la cancha no existe', async () => {
-    prisma.__tx.court.findUnique.mockResolvedValueOnce(null);
+    prisma.__tx.court.findFirst.mockResolvedValueOnce(null);
     await expect(
       service.create(user, {
         courtId: activeCourt.id,
@@ -147,7 +160,7 @@ describe('ReservationsService.create', () => {
   });
 
   it('lanza BadRequest si la cancha está suspendida', async () => {
-    prisma.__tx.court.findUnique.mockResolvedValueOnce({ ...activeCourt, isActive: false });
+    prisma.__tx.court.findFirst.mockResolvedValueOnce({ ...activeCourt, isActive: false });
     await expect(
       service.create(user, {
         courtId: activeCourt.id,

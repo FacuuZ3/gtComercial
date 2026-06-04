@@ -48,6 +48,7 @@ export class AuditInterceptor implements NestInterceptor {
 
         // Fire-and-forget: no esperamos al audit antes de devolver.
         void this.audit.record({
+          tenantId: user.tenantId,
           actorId: user.id,
           actorEmail: user.email,
           action,

@@ -15,16 +15,18 @@ services:
   # --------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: padel_postgres
+    container_name: padel_saas_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-padel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-padel}
-      POSTGRES_DB: ${POSTGRES_DB:-padel_turnos}
+      POSTGRES_DB: ${POSTGRES_DB:-padel_saas}
+    # Puerto host 5433 (no 5432) para no colisionar con otras instancias de
+    # Postgres locales. La conexión desde la app usa localhost:5433.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - padel_pgdata:/var/lib/postgresql/data
+      - padel_saas_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-padel}"]
       interval: 5s
@@ -39,13 +41,13 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-    container_name: padel_api
+    container_name: padel_saas_api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-padel}:${POSTGRES_PASSWORD:-padel}@postgres:5432/${POSTGRES_DB:-padel_turnos}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-padel}:${POSTGRES_PASSWORD:-padel}@postgres:5432/${POSTGRES_DB:-padel_saas}?schema=public
       NODE_ENV: production
     env_file:
       - ./apps/api/.env
@@ -55,5 +57,5 @@ services:
       - full
 
 volumes:
-  padel_pgdata:
-    name: padel_pgdata
+  padel_saas_pgdata:
+    name: padel_saas_pgdata

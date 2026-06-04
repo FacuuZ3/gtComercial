@@ -57,9 +57,49 @@ enum ReservationStatus {
   CANCELLED
 }
 
+/// Planes comerciales del tenant (complejo). Determina límites y features.
+/// FREE:  plan de evaluación / complejo chico.
+/// BASIC: plan pago inicial.
+/// PRO:   plan completo (sin límites de canchas, features avanzadas).
+enum TenantPlan {
+  FREE
+  BASIC
+  PRO
+}
+
 // ===========================================================================
 //  MODELOS
 // ===========================================================================
+
+/// Tenant = complejo deportivo cliente de la plataforma.
+///
+/// Cada complejo que contrata el SaaS es un tenant. Todas las entidades de
+/// negocio (usuarios, canchas, reservas, etc.) pertenecen a un tenant y se
+/// aíslan entre sí: un complejo nunca ve ni opera datos de otro.
+///
+///  - slug:     identificador legible para el subdominio (clubA.miapp.com).
+///              Único globalmente.
+///  - plan:     plan comercial contratado.
+///  - isActive: permite suspender un complejo (impago, baja) sin borrar datos.
+model Tenant {
+  id       String     @id @default(uuid()) @db.Uuid
+  name     String     @db.VarChar(120)
+  slug     String     @unique @db.VarChar(60)
+  plan     TenantPlan @default(FREE)
+  isActive Boolean    @default(true)
+
+  users                 User[]
+  courts                Court[]
+  reservations          Reservation[]
+  recurringReservations RecurringReservation[]
+  auditLogs             AuditLog[]
+  clubInfo              ClubInfo?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tenants")
+}
 
 /// Usuarios del sistema (clientes y administradores).
 ///
@@ -81,8 +121,12 @@ enum ReservationStatus {
 ///  - updatedAt:         Marca temporal de última modificación.
 model User {
   id               String   @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) al que pertenece el usuario.
+  tenantId         String   @db.Uuid
   name             String   @db.VarChar(120)
-  email            String   @unique @db.VarChar(160)
+  /// Email único DENTRO del tenant (no global): un mismo email puede tener
+  /// cuenta en complejos distintos. Ver @@unique([tenantId, email]).
+  email            String   @db.VarChar(160)
   password         String   @db.VarChar(255)
   phone            String?  @db.VarChar(30)
   role             Role     @default(USER)
@@ -93,12 +137,14 @@ model User {
   /// Vencimiento del token de reseteo (típicamente 1 hora desde su emisión).
   passwordResetTokenExpiresAt DateTime?
 
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   reservations Reservation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([role])
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
   @@map("users")
 }
 
@@ -118,19 +164,22 @@ model User {
 ///  - reservations:  Reservas asociadas (cardinalidad 1:N).
 model Court {
   id           String    @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) dueño de la cancha.
+  tenantId     String    @db.Uuid
   name         String    @db.VarChar(80)
   sportType    SportType @default(PADEL)
   description  String?   @db.VarChar(500)
   isActive     Boolean   @default(true)
   pricePerHour Decimal   @db.Decimal(10, 2)
 
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   reservations          Reservation[]
   recurringReservations RecurringReservation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([isActive])
+  @@index([tenantId, isActive])
   @@map("courts")
 }
 
@@ -155,6 +204,9 @@ model Court {
 /// Sección: Subsistema de Reservas - Bloqueos recurrentes
 model RecurringReservation {
   id          String  @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) dueño del turno fijo. Denormalizado desde Court para
+  /// permitir el filtro automático por tenant sin un join adicional.
+  tenantId    String  @db.Uuid
   courtId     String  @db.Uuid
   dayOfWeek   Int     @db.SmallInt
   startMinute Int     @db.SmallInt
@@ -162,12 +214,13 @@ model RecurringReservation {
   notes       String? @db.VarChar(500)
   isActive    Boolean @default(true)
 
-  court Court @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  court  Court  @relation(fields: [courtId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([courtId, dayOfWeek, isActive])
+  @@index([tenantId, courtId, dayOfWeek, isActive])
   @@map("recurring_reservations")
 }
 
@@ -197,6 +250,9 @@ model RecurringReservation {
 ///    consultas de disponibilidad y solapamiento (ver ReservationsService).
 model Reservation {
   id        String            @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) dueño de la reserva. Denormalizado desde Court para
+  /// que el filtro automático por tenant no requiera un join.
+  tenantId  String            @db.Uuid
   userId    String            @db.Uuid
   courtId   String            @db.Uuid
   startTime DateTime          @db.Timestamptz(6)
@@ -210,18 +266,19 @@ model Reservation {
   /// NULL = nunca fue reprogramada.
   rescheduledAt DateTime?     @db.Timestamptz(6)
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
-  court Court @relation(fields: [courtId], references: [id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  court  Court  @relation(fields: [courtId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Índice principal para consultas de disponibilidad por cancha y rango.
-  @@index([courtId, startTime, endTime])
+  // Índice principal para consultas de disponibilidad por tenant, cancha y rango.
+  @@index([tenantId, courtId, startTime, endTime])
 
   // Índices secundarios para los listados del dashboard.
-  @@index([userId, startTime])
-  @@index([status])
+  @@index([tenantId, userId, startTime])
+  @@index([tenantId, status])
 
   @@map("reservations")
 }
@@ -238,6 +295,8 @@ model Reservation {
 /// Sección: Trazabilidad de acciones administrativas (audit log)
 model AuditLog {
   id        String   @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) en cuyo contexto ocurrió la acción.
+  tenantId  String   @db.Uuid
   /// Usuario que ejecutó la acción.
   actorId   String   @db.Uuid
   actorEmail String  @db.VarChar(160)
@@ -253,21 +312,23 @@ model AuditLog {
   ip        String?  @db.VarChar(45)
   createdAt DateTime @default(now())
 
-  @@index([actorId, createdAt])
-  @@index([resource, resourceId])
-  @@index([createdAt])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, actorId, createdAt])
+  @@index([tenantId, resource, resourceId])
+  @@index([tenantId, createdAt])
   @@map("audit_logs")
 }
 
-/// Información institucional del club (singleton).
+/// Información institucional del club.
 ///
-/// El sistema mantiene una única fila para representar los datos públicos
-/// del complejo: ubicación, horarios y servicios. La edición se realiza
-/// desde el panel administrativo.
-///
-/// Sección: Configuración pública del complejo
+/// Datos públicos del complejo: ubicación, horarios y servicios. Existe una
+/// fila por tenant (relación 1:1 con Tenant). La edición se realiza desde el
+/// panel administrativo del complejo.
 model ClubInfo {
-  id           String   @id @default("default")
+  id           String   @id @default(uuid()) @db.Uuid
+  /// Tenant (complejo) dueño de esta información. Relación 1:1.
+  tenantId     String   @unique @db.Uuid
   /// Dirección postal / ubicación del complejo.
   address      String   @db.VarChar(255)
   /// URL del iframe de Google Maps (campo `src` del embed). Opcional.
@@ -281,6 +342,8 @@ model ClubInfo {
   /// Lista de servicios disponibles (Wi-Fi, Vestuario, Bar, etc.).
   /// Se almacena como array nativo de Postgres.
   services     String[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

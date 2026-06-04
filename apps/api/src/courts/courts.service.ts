@@ -21,20 +21,26 @@ import { Court, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCourtDto } from './dto/create-court.dto';
 import { UpdateCourtDto } from './dto/update-court.dto';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 @Injectable()
 export class CourtsService {
   constructor(private readonly prisma: PrismaService) {}
 
   list(includeInactive = false): Promise<Court[]> {
+    const tenantId = requireTenantId();
     return this.prisma.court.findMany({
-      where: includeInactive ? {} : { isActive: true },
+      where: { tenantId, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: { name: 'asc' },
     });
   }
 
   async findByIdOrThrow(id: string): Promise<Court> {
-    const court = await this.prisma.court.findUnique({ where: { id } });
+    // findFirst scopeado por tenant: impide acceder a una cancha de otro
+    // complejo aunque se conozca su id (defensa en profundidad).
+    const court = await this.prisma.court.findFirst({
+      where: { id, tenantId: requireTenantId() },
+    });
     if (!court) throw new NotFoundException('Cancha no encontrada.');
     return court;
   }
@@ -42,6 +48,7 @@ export class CourtsService {
   create(dto: CreateCourtDto): Promise<Court> {
     return this.prisma.court.create({
       data: {
+        tenantId: requireTenantId(),
         name: dto.name,
         sportType: dto.sportType,
         description: dto.description,

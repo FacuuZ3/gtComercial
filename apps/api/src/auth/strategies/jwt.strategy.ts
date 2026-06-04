@@ -17,6 +17,7 @@ interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  tenantId: string;
 }
 
 @Injectable()
@@ -31,6 +32,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   validate(payload: AccessTokenPayload): AuthUser {
     if (!payload?.sub) throw new UnauthorizedException('Token inválido.');
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    if (!payload.tenantId) throw new UnauthorizedException('Token sin tenant.');
+
+    // El scoping de tenant lo fija el TenantMiddleware (que extrae el tenantId
+    // del token dentro del scope correcto de AsyncLocalStorage). Acá sólo se
+    // expone en AuthUser para los handlers que lo necesiten explícitamente.
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      tenantId: payload.tenantId,
+    };
   }
 }

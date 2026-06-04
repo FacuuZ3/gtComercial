@@ -7,8 +7,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AuditLog, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 export interface AuditRecord {
+  /** Tenant (complejo) en cuyo contexto ocurrió la acción. */
+  tenantId: string;
   actorId: string;
   actorEmail: string;
   action: string;
@@ -36,6 +39,7 @@ export class AuditService {
     try {
       await this.prisma.auditLog.create({
         data: {
+          tenantId: rec.tenantId,
           actorId: rec.actorId,
           actorEmail: rec.actorEmail,
           action: rec.action,
@@ -65,7 +69,7 @@ export class AuditService {
     resource?: string;
     actorId?: string;
   }): Promise<{ items: AuditLog[]; total: number }> {
-    const where: Prisma.AuditLogWhereInput = {};
+    const where: Prisma.AuditLogWhereInput = { tenantId: requireTenantId() };
     if (params.resource) where.resource = params.resource;
     if (params.actorId) where.actorId = params.actorId;
 
