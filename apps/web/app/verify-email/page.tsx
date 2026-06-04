@@ -1,6 +1,10 @@
 /**
  * /verify-email?token=... - Página de destino del email de verificación.
  * Consume GET /auth/verify-email del backend y muestra el resultado.
+ *
+ * Nota: el contenido que lee searchParams se aísla en VerifyEmailContent y
+ * se envuelve en <Suspense> a nivel de page para cumplir con el requisito
+ * de Next.js 14 de no consumir search params durante el prerender.
  */
 
 'use client';
@@ -22,6 +26,14 @@ import {
 type Status = 'idle' | 'loading' | 'ok' | 'error';
 
 export default function VerifyEmailPage() {
+  return (
+    <React.Suspense fallback={<VerifyEmailFallback />}>
+      <VerifyEmailContent />
+    </React.Suspense>
+  );
+}
+
+function VerifyEmailContent() {
   const params = useSearchParams();
   const token = params.get('token');
   const [status, setStatus] = React.useState<Status>('idle');
@@ -76,6 +88,19 @@ export default function VerifyEmailPage() {
             <Button>Ir al login</Button>
           </Link>
         </CardFooter>
+      </Card>
+    </div>
+  );
+}
+
+function VerifyEmailFallback() {
+  return (
+    <div className="container flex min-h-[calc(100vh-4rem)] items-center justify-center py-10">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Verificación de email</CardTitle>
+          <CardDescription>Cargando...</CardDescription>
+        </CardHeader>
       </Card>
     </div>
   );

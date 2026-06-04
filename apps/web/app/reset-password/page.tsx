@@ -3,6 +3,10 @@
  * ---------------------------------------------------------------------------
  * Página de destino del email de reseteo. El usuario define su nueva
  * contraseña (con confirmación) y se invalida el token.
+ *
+ * Nota: el contenido que lee searchParams se aísla en ResetPasswordContent y
+ * se envuelve en <Suspense> a nivel de page para cumplir con el requisito
+ * de Next.js 14 de no consumir search params durante el prerender.
  */
 
 'use client';
@@ -27,6 +31,14 @@ import { api, ApiError } from '@/lib/api';
 import { resetPasswordSchema, ResetPasswordValues } from '@/lib/schemas';
 
 export default function ResetPasswordPage() {
+  return (
+    <React.Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordContent />
+    </React.Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const params = useSearchParams();
   const token = params.get('token') ?? '';
   const [serverError, setServerError] = React.useState<string | null>(null);
@@ -120,6 +132,18 @@ export default function ResetPasswordPage() {
             </p>
           </CardFooter>
         </form>
+      </Card>
+    </div>
+  );
+}
+
+function ResetPasswordFallback() {
+  return (
+    <div className="container flex min-h-[calc(100dvh-4rem)] items-center justify-center py-10">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Cargando...</CardTitle>
+        </CardHeader>
       </Card>
     </div>
   );
