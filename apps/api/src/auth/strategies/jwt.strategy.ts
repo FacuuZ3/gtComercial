@@ -12,7 +12,6 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from '@prisma/client';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
-import { setTenantId } from '../../common/tenancy/tenant-context';
 
 interface AccessTokenPayload {
   sub: string;
@@ -35,10 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!payload?.sub) throw new UnauthorizedException('Token inválido.');
     if (!payload.tenantId) throw new UnauthorizedException('Token sin tenant.');
 
-    // El token es la fuente de verdad del tenant para usuarios autenticados:
-    // sobreescribe lo que haya resuelto el TenantMiddleware (subdominio/header).
-    setTenantId(payload.tenantId);
-
+    // El scoping de tenant lo fija el TenantMiddleware (que extrae el tenantId
+    // del token dentro del scope correcto de AsyncLocalStorage). Acá sólo se
+    // expone en AuthUser para los handlers que lo necesiten explícitamente.
     return {
       id: payload.sub,
       email: payload.email,

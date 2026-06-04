@@ -48,12 +48,3 @@ export function requireTenantId(): string {
   }
   return id;
 }
-
-/**
- * Sobrescribe el tenantId del scope actual. Lo usa la JwtStrategy para fijar
- * el tenant del token autenticado por encima del resuelto por el middleware.
- */
-export function setTenantId(tenantId: string): void {
-  const store = storage.getStore();
-  if (store) store.tenantId = tenantId;
-}

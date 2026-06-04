@@ -38,20 +38,51 @@ export class TenantMiddleware implements NestMiddleware {
   }
 
   private async resolveTenantId(req: Request): Promise<string | null> {
-    // 1) Header explícito (dev / clientes de API).
+    // 1) Token JWT (fuente de verdad para requests autenticados). Se decodifica
+    //    SIN verificar la firma — sólo para enrutar el tenant. El JwtAuthGuard
+    //    valida la firma después, y rechaza el request si el token es inválido,
+    //    de modo que un tenantId falso nunca llega a tocar datos.
+    //
+    //    Esto evita una fuga cross-tenant: el token DEBE ganar sobre el header,
+    //    y debe fijarse en ESTE scope de AsyncLocalStorage (la JwtStrategy corre
+    //    fuera de este contexto async y no puede sobreescribirlo de forma fiable).
+    const fromToken = this.tenantIdFromAuthHeader(req);
+    if (fromToken) return fromToken;
+
+    // 2) Header explícito (rutas públicas en dev / clientes de API).
     const header = req.headers['x-tenant-id'];
     const headerValue = Array.isArray(header) ? header[0] : header;
     if (headerValue) {
       return this.lookup(headerValue.trim());
     }
 
-    // 2) Subdominio.
+    // 3) Subdominio (rutas públicas en producción).
     const slug = this.extractSubdomain(req.hostname);
     if (slug) {
       return this.lookup(slug);
     }
 
     return null;
+  }
+
+  /**
+   * Extrae el tenantId del payload del Bearer token, sin verificar la firma.
+   * Devuelve null si no hay token o no se puede parsear. La verificación real
+   * la realiza el JwtAuthGuard aguas abajo.
+   */
+  private tenantIdFromAuthHeader(req: Request): string | null {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return null;
+    const token = auth.slice(7);
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      const json = Buffer.from(parts[1], 'base64url').toString('utf8');
+      const payload = JSON.parse(json) as { tenantId?: unknown };
+      return typeof payload.tenantId === 'string' ? payload.tenantId : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Resuelve un identificador (uuid o slug) al id del tenant, si existe y está activo. */
