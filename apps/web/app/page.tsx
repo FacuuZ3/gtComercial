@@ -9,6 +9,7 @@
  */
 
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { MapPin, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClubInfoSection } from '@/components/landing/club-info';
@@ -16,6 +17,7 @@ import { HeroCTAs } from '@/components/landing/hero-ctas';
 import { CourtImage } from '@/components/landing/court-image';
 import { ClubInfoDto, CourtDto } from '@/lib/types';
 import { formatPriceARS } from '@/lib/utils';
+import { getTenantSlugFromHost } from '@/lib/tenant';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -53,9 +55,12 @@ function courtImageFor(_seed: string, _index: number): string {
   // return variants[pick];
 }
 
-async function fetchCourts(): Promise<CourtDto[]> {
+async function fetchCourts(tenantSlug: string): Promise<CourtDto[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/courts`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}/api/courts`, {
+      headers: { 'X-Tenant-Id': tenantSlug },
+      cache: 'no-store',
+    });
     if (!res.ok) return [];
     return (await res.json()) as CourtDto[];
   } catch {
@@ -63,9 +68,12 @@ async function fetchCourts(): Promise<CourtDto[]> {
   }
 }
 
-async function fetchClubInfo(): Promise<ClubInfoDto | null> {
+async function fetchClubInfo(tenantSlug: string): Promise<ClubInfoDto | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/club-info`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}/api/club-info`, {
+      headers: { 'X-Tenant-Id': tenantSlug },
+      cache: 'no-store',
+    });
     if (!res.ok) return null;
     return (await res.json()) as ClubInfoDto;
   } catch {
@@ -74,7 +82,12 @@ async function fetchClubInfo(): Promise<ClubInfoDto | null> {
 }
 
 export default async function LandingPage() {
-  const [courts, clubInfo] = await Promise.all([fetchCourts(), fetchClubInfo()]);
+  // El tenant se resuelve del host (subdominio en prod, default en dev).
+  const tenantSlug = getTenantSlugFromHost(headers().get('host'));
+  const [courts, clubInfo] = await Promise.all([
+    fetchCourts(tenantSlug),
+    fetchClubInfo(tenantSlug),
+  ]);
 
   return (
     <div className="bg-zinc-50 dark:bg-zinc-950">
