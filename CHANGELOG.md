@@ -7,6 +7,19 @@ versionado siguiendo [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Seguridad
+- Actualizado Next.js de 14.1.0 a 14.2.35 (mitiga CVE-2025-29927:
+  middleware authorization bypass). Vulnerabilidades reportadas por
+  `npm audit` bajan de 39 a 8.
+
+### Corregido
+- `useSearchParams()` en `/verify-email` y `/reset-password` ahora va
+  envuelto en `<Suspense>`, requisito de Next.js 14 para prerender SSG.
+
+### Documentación
+- Agregado `docs/ROADMAP.md` con hitos v0.2, v0.3 y v0.4.
+- Agregado `CHANGELOG.md` siguiendo Keep a Changelog.
+
 ### Por agregar
 - Integración con MercadoPago Checkout Pro (P0.1).
 - Multi-tenant con scoping por subdomain (P0.2).
