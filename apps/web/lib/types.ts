@@ -14,6 +14,8 @@ export interface UserDto {
   phone?: string | null;
   role: Role;
   isEmailVerified: boolean;
+  /** Nombre del complejo (tenant) al que pertenece. Para branding white-label. */
+  tenantName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +61,8 @@ export interface ClubInfoDto {
   weekendHours: string;
   holidayHours: string;
   services: string[];
+  /** Nombre del complejo (tenant) para branding white-label. */
+  clubName: string;
   createdAt: string;
   updatedAt: string;
 }

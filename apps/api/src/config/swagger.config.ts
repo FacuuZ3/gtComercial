@@ -6,11 +6,13 @@
  */
 
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 export function setupSwagger(app: INestApplication): void {
+  const appName = app.get(ConfigService).get<string>('APP_NAME') ?? 'Reservá';
   const config = new DocumentBuilder()
-    .setTitle('Pádel SaaS API')
+    .setTitle(`${appName} API`)
     .setDescription(
       'Backend de la plataforma SaaS de gestión y reserva de turnos ' +
         'para complejos deportivos.',

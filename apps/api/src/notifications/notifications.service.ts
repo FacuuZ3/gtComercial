@@ -19,6 +19,8 @@ import { INotificationChannel, NotificationPayload } from './channels/notificati
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly channels: Map<string, INotificationChannel> = new Map();
+  /** Nombre de la plataforma para el branding de los emails. */
+  private readonly appName: string;
 
   constructor(
     private readonly config: ConfigService,
@@ -27,6 +29,7 @@ export class NotificationsService {
     // Registro inicial de canales disponibles. La extensión a WhatsApp solo
     // requiere instanciar WhatsAppChannel y agregarlo aquí.
     this.channels.set(this.emailChannel.name, this.emailChannel);
+    this.appName = this.config.get<string>('APP_NAME') ?? 'Reservá';
   }
 
   private async dispatch(channel: string, payload: NotificationPayload): Promise<void> {
@@ -45,15 +48,15 @@ export class NotificationsService {
 
     await this.dispatch('email', {
       to,
-      subject: 'Verificá tu cuenta — Pádel Turnos',
+      subject: `Verificá tu cuenta — ${this.appName}`,
       text:
         `Hola ${name},\n\n` +
-        `Te damos la bienvenida a Pádel Turnos. ` +
+        `Te damos la bienvenida a ${this.appName}. ` +
         `Para activar tu cuenta hacé clic en el siguiente enlace:\n${link}\n\n` +
         `Si no creaste esta cuenta, ignorá este mensaje.`,
       html:
         `<p>Hola <strong>${name}</strong>,</p>` +
-        `<p>Te damos la bienvenida a <strong>Pádel Turnos</strong>. ` +
+        `<p>Te damos la bienvenida a <strong>${this.appName}</strong>. ` +
         `Para activar tu cuenta hacé clic en el botón:</p>` +
         `<p><a href="${link}" style="background:#10b981;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Verificar mi cuenta</a></p>` +
         `<p>O copiá este enlace en el navegador:<br/><code>${link}</code></p>` +
@@ -71,7 +74,7 @@ export class NotificationsService {
     const when = startTime.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
     await this.dispatch('email', {
       to,
-      subject: 'Turno confirmado — Pádel Turnos',
+      subject: `Turno confirmado — ${this.appName}`,
       text:
         `Hola ${name},\n\n` +
         `Tu turno en ${courtName} fue confirmado para ${when}.\n` +
@@ -89,7 +92,7 @@ export class NotificationsService {
     const link = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
     await this.dispatch('email', {
       to,
-      subject: 'Restablecé tu contraseña — Pádel Turnos',
+      subject: `Restablecé tu contraseña — ${this.appName}`,
       text:
         `Hola ${name},\n\n` +
         `Recibimos una solicitud para cambiar tu contraseña. ` +
@@ -121,7 +124,7 @@ export class NotificationsService {
     });
     await this.dispatch('email', {
       to,
-      subject: 'Recordatorio: tu turno es mañana — Pádel Turnos',
+      subject: `Recordatorio: tu turno es mañana — ${this.appName}`,
       text:
         `Hola ${name},\n\n` +
         `Te recordamos que tenés reservado un turno en ${courtName} para ${when}.\n` +
@@ -141,7 +144,7 @@ export class NotificationsService {
     const when = startTime.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
     await this.dispatch('email', {
       to,
-      subject: 'Turno cancelado — Pádel Turnos',
+      subject: `Turno cancelado — ${this.appName}`,
       text:
         `Hola ${name},\n\nTu turno en ${courtName} del ${when} ha sido cancelado.\n` +
         `Si tenés dudas, contactá al complejo.`,

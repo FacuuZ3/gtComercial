@@ -5,10 +5,13 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { APP_NAME } from '@/lib/brand';
 
 interface LogoProps {
   className?: string;
   iconClassName?: string;
+  /** Nombre a mostrar junto al ícono. Default: nombre de la plataforma. */
+  name?: string;
 }
 
 export function LogoMark({ className }: { className?: string }) {
@@ -31,11 +34,11 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
-export function Logo({ className, iconClassName }: LogoProps) {
+export function Logo({ className, iconClassName, name = APP_NAME }: LogoProps) {
   return (
     <span className={cn('inline-flex items-center gap-2 font-semibold tracking-tight', className)}>
       <LogoMark className={iconClassName} />
-      <span>Pádel Turnos</span>
+      <span>{name}</span>
     </span>
   );
 }

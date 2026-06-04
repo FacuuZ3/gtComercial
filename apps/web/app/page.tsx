@@ -8,6 +8,7 @@
  *   4. Footer con links.
  */
 
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { MapPin, Star } from 'lucide-react';
@@ -18,6 +19,7 @@ import { CourtImage } from '@/components/landing/court-image';
 import { ClubInfoDto, CourtDto } from '@/lib/types';
 import { formatPriceARS } from '@/lib/utils';
 import { getTenantSlugFromHost } from '@/lib/tenant';
+import { APP_NAME } from '@/lib/brand';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -81,6 +83,21 @@ async function fetchClubInfo(tenantSlug: string): Promise<ClubInfoDto | null> {
   }
 }
 
+/**
+ * Título y descripción por complejo (white-label): el <title> de la pestaña
+ * usa el nombre del complejo resuelto del host, con fallback al nombre de
+ * plataforma.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const tenantSlug = getTenantSlugFromHost(headers().get('host'));
+  const clubInfo = await fetchClubInfo(tenantSlug);
+  const name = clubInfo?.clubName || APP_NAME;
+  return {
+    title: `${name} — Reservá tu cancha`,
+    description: `Reservá tu turno en ${name} online, con confirmación inmediata.`,
+  };
+}
+
 export default async function LandingPage() {
   // El tenant se resuelve del host (subdominio en prod, default en dev).
   const tenantSlug = getTenantSlugFromHost(headers().get('host'));
@@ -89,12 +106,15 @@ export default async function LandingPage() {
     fetchClubInfo(tenantSlug),
   ]);
 
+  // Nombre del complejo para branding white-label; fallback a la plataforma.
+  const clubName = clubInfo?.clubName || APP_NAME;
+
   return (
     <div className="bg-zinc-50 dark:bg-zinc-950">
-      <Hero />
+      <Hero clubName={clubName} />
       <CourtsSection courts={courts} />
       {clubInfo && <ClubInfoSection info={clubInfo} />}
-      <Footer info={clubInfo} />
+      <Footer info={clubInfo} clubName={clubName} />
     </div>
   );
 }
@@ -103,7 +123,7 @@ export default async function LandingPage() {
 //  HERO
 // ============================================================================
 
-function Hero() {
+function Hero({ clubName }: { clubName: string }) {
   return (
     <section className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-brand-50/60 via-white to-zinc-50 dark:from-brand-900/20 dark:via-zinc-950 dark:to-zinc-950" />
@@ -116,7 +136,10 @@ function Hero() {
             Reservas online · 13 a 23 hs · Confirmación inmediata
           </span>
 
-          <h1 className="mt-6 text-5xl font-semibold leading-[0.95] tracking-tighter text-zinc-950 md:text-7xl dark:text-zinc-50">
+          <p className="mt-6 font-mono text-sm uppercase tracking-widest text-brand-700 dark:text-brand-400">
+            {clubName}
+          </p>
+          <h1 className="mt-2 text-5xl font-semibold leading-[0.95] tracking-tighter text-zinc-950 md:text-7xl dark:text-zinc-50">
             Tu cancha,
             <br />
             <span className="text-brand-700 dark:text-brand-400">en tres clicks.</span>
@@ -276,20 +299,17 @@ function EmptyCourts() {
 //  FOOTER
 // ============================================================================
 
-function Footer({ info }: { info: ClubInfoDto | null }) {
+function Footer({ info, clubName }: { info: ClubInfoDto | null; clubName: string }) {
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
       <div className="container py-12">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-mono text-xs uppercase tracking-widest text-brand-700 dark:text-brand-400">
-              / contacto
-            </p>
-            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-              hola@padelturnos.local · +54 9 3482 47-1928
+              / {clubName}
             </p>
             {info && (
-              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
                 {info.address}
               </p>
             )}
@@ -315,8 +335,8 @@ function Footer({ info }: { info: ClubInfoDto | null }) {
         </div>
 
         <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-zinc-200 pt-6 text-xs text-zinc-500 sm:flex-row dark:border-zinc-800 dark:text-zinc-400">
-          <span>© {new Date().getFullYear()} Pádel SaaS. Todos los derechos reservados.</span>
-          <span className="font-mono">v{process.env.NEXT_PUBLIC_APP_VERSION ?? '0.1.0'}</span>
+          <span>© {new Date().getFullYear()} {clubName}. Todos los derechos reservados.</span>
+          <span className="font-mono">Powered by {APP_NAME}</span>
         </div>
       </div>
     </footer>

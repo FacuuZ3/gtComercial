@@ -16,6 +16,7 @@ import { Logo } from './logo';
 import { ThemeToggle } from './theme-toggle';
 import { clearSession, getRole, getStoredUser } from '@/lib/auth';
 import { UserDto } from '@/lib/types';
+import { APP_NAME } from '@/lib/brand';
 
 export function Navbar() {
   const router = useRouter();
@@ -55,7 +56,9 @@ export function Navbar() {
           href="/"
           className="text-brand-700 transition-opacity hover:opacity-80 dark:text-brand-500"
         >
-          <Logo />
+          {/* Usuario logueado: muestra el nombre de su complejo (white-label).
+              Anónimo: nombre genérico de la plataforma. */}
+          <Logo name={user?.tenantName ?? APP_NAME} />
         </Link>
 
         <nav className="flex items-center gap-2">

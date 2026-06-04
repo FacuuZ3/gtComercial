@@ -23,7 +23,15 @@ const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'admin', 'localhost'])
 function slugFromHostname(hostname: string): string | null {
   const host = hostname.split(':')[0]; // descarta el puerto
   const parts = host.split('.');
-  // Necesitamos sub.dominio.tld (3+ partes) para tener un subdominio real.
+
+  // Caso desarrollo: "sur.localhost" (2 partes, la última es localhost).
+  // Permite probar el white-label localmente con http://sur.localhost:3000.
+  if (parts.length === 2 && parts[1] === 'localhost') {
+    const sub = parts[0].toLowerCase();
+    return RESERVED_SUBDOMAINS.has(sub) ? null : sub;
+  }
+
+  // Caso producción: sub.dominio.tld (3+ partes).
   if (parts.length < 3) return null;
   const sub = parts[0].toLowerCase();
   if (RESERVED_SUBDOMAINS.has(sub)) return null;

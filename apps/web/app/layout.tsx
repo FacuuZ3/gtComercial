@@ -10,11 +10,11 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { Providers } from '@/components/providers';
 import { Navbar } from '@/components/navbar';
+import { APP_NAME } from '@/lib/brand';
 
 export const metadata: Metadata = {
-  title: 'Pádel Turnos — Reservá tu cancha',
-  description:
-    'Sistema integral de gestión y reserva de turnos para complejos deportivos de pádel.',
+  title: `${APP_NAME} — Reservá tu cancha`,
+  description: 'Gestión y reserva de turnos online para complejos deportivos.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

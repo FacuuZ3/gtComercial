@@ -23,6 +23,7 @@ import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -43,6 +44,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -100,7 +102,9 @@ export class AuthService {
   // Login
   // -------------------------------------------------------------------------
 
-  async login(dto: LoginDto): Promise<TokenPair & { user: SafeUser }> {
+  async login(
+    dto: LoginDto,
+  ): Promise<TokenPair & { user: SafeUser & { tenantName: string } }> {
     const user = await this.users.findByEmail(dto.email);
     // Mensaje genérico para no revelar si el email existe o no (mitiga
     // enumeración de cuentas).
@@ -113,8 +117,17 @@ export class AuthService {
       throw new UnauthorizedException('La cuenta aún no fue verificada por email.');
     }
 
+    // Nombre del complejo para el branding white-label del frontend.
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { name: true },
+    });
+
     const tokens = await this.signTokens(user);
-    return { ...tokens, user: this.toSafeUser(user) };
+    return {
+      ...tokens,
+      user: { ...this.toSafeUser(user), tenantName: tenant?.name ?? '' },
+    };
   }
 
   // -------------------------------------------------------------------------
