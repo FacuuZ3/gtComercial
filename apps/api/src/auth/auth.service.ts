@@ -171,7 +171,12 @@ export class AuthService {
   // -------------------------------------------------------------------------
 
   private async signTokens(user: User): Promise<TokenPair> {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    };
 
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),

@@ -17,6 +17,8 @@ export interface AuthUser {
   id: string;
   email: string;
   role: Role;
+  /** Tenant (complejo) al que pertenece el usuario. */
+  tenantId: string;
 }
 
 export const CurrentUser = createParamDecorator(

@@ -51,6 +51,7 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { RescheduleReservationDto } from './dto/reschedule.dto';
 import { ReservationEventPayload } from '../notifications/listeners/reservation.listener';
 import { BOOKING_POLICY, daysFromNow, hoursFromNow } from './booking-policy';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 /** Duración estándar de un turno (en minutos). */
 const SLOT_DURATION_MIN = 90;
@@ -104,8 +105,10 @@ export class ReservationsService {
    * solape con ellos.
    */
   async getAvailability(courtId: string, isoDate: string): Promise<AvailabilitySlot[]> {
-    // Validamos que la cancha exista y esté activa.
-    const court = await this.prisma.court.findUnique({ where: { id: courtId } });
+    const tenantId = requireTenantId();
+
+    // Validamos que la cancha exista, esté activa y pertenezca al tenant.
+    const court = await this.prisma.court.findFirst({ where: { id: courtId, tenantId } });
     if (!court) throw new NotFoundException('Cancha no encontrada.');
     if (!court.isActive) throw new BadRequestException('La cancha no está habilitada.');
 
@@ -119,6 +122,7 @@ export class ReservationsService {
     // Traemos las reservas activas (no canceladas) del día.
     const reservations = await this.prisma.reservation.findMany({
       where: {
+        tenantId,
         courtId,
         status: { not: ReservationStatus.CANCELLED },
         startTime: { lt: dayEnd },
@@ -130,7 +134,7 @@ export class ReservationsService {
     // Traemos también los turnos fijos del día de la semana correspondiente.
     const dayOfWeek = dayStart.getDay();
     const recurring = await this.prisma.recurringReservation.findMany({
-      where: { courtId, dayOfWeek, isActive: true },
+      where: { tenantId, courtId, dayOfWeek, isActive: true },
       select: { id: true, startMinute: true, endMinute: true },
     });
 
@@ -169,7 +173,7 @@ export class ReservationsService {
   /** Listado de reservas del usuario autenticado (más recientes primero). */
   listMine(userId: string): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
-      where: { userId },
+      where: { tenantId: requireTenantId(), userId },
       orderBy: { startTime: 'desc' },
       include: { court: true },
     });
@@ -180,7 +184,7 @@ export class ReservationsService {
    * Usado por el dashboard de ADMIN.
    */
   listAdmin(filters: { date?: string; courtId?: string }): Promise<Reservation[]> {
-    const where: Prisma.ReservationWhereInput = {};
+    const where: Prisma.ReservationWhereInput = { tenantId: requireTenantId() };
     if (filters.courtId) where.courtId = filters.courtId;
     if (filters.date) {
       // Misma normalización local-time que en getAvailability para evitar
@@ -229,6 +233,10 @@ export class ReservationsService {
     user: AuthUser,
     dto: CreateReservationDto,
   ): Promise<Reservation> {
+    // El tenant del usuario autenticado es la fuente de verdad: toda la
+    // operación queda scopeada a su complejo.
+    const tenantId = user.tenantId;
+
     return this.prisma.$transaction(
       async (tx) => {
         // -------------------------------------------------------------------
@@ -270,6 +278,7 @@ export class ReservationsService {
           // creaciones simultáneas.
           const activeCount = await tx.reservation.count({
             where: {
+              tenantId,
               userId: user.id,
               status: { not: ReservationStatus.CANCELLED },
               startTime: { gte: new Date() },
@@ -290,7 +299,7 @@ export class ReservationsService {
         //     Se consulta dentro de la transacción para evitar TOCTOU
         //     (time-of-check to time-of-use) frente a soft-deletes.
         // -------------------------------------------------------------------
-        const court = await tx.court.findUnique({ where: { id: dto.courtId } });
+        const court = await tx.court.findFirst({ where: { id: dto.courtId, tenantId } });
         if (!court) throw new NotFoundException('Cancha no encontrada.');
         if (!court.isActive) {
           throw new BadRequestException('La cancha no está habilitada para reservas.');
@@ -316,7 +325,8 @@ export class ReservationsService {
         const overlapping = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
           SELECT id
           FROM "reservations"
-          WHERE "courtId" = ${dto.courtId}::uuid
+          WHERE "tenantId" = ${tenantId}::uuid
+            AND "courtId" = ${dto.courtId}::uuid
             AND status <> 'CANCELLED'
             AND "startTime" < ${dto.endTime}
             AND "endTime"   > ${dto.startTime}
@@ -343,6 +353,7 @@ export class ReservationsService {
 
         const recurringConflict = await tx.recurringReservation.findFirst({
           where: {
+            tenantId,
             courtId: dto.courtId,
             dayOfWeek,
             isActive: true,
@@ -364,6 +375,7 @@ export class ReservationsService {
         // -------------------------------------------------------------------
         const reservation = await tx.reservation.create({
           data: {
+            tenantId,
             userId: user.id,
             courtId: dto.courtId,
             startTime: dto.startTime,
@@ -487,10 +499,11 @@ export class ReservationsService {
    * solapamiento mediante una transacción serializable.
    */
   reschedule(id: string, dto: RescheduleReservationDto): Promise<Reservation> {
+    const tenantId = requireTenantId();
     return this.withSerializableRetry(() =>
       this.prisma.$transaction(
         async (tx) => {
-          const current = await tx.reservation.findUnique({ where: { id } });
+          const current = await tx.reservation.findFirst({ where: { id, tenantId } });
           if (!current) throw new NotFoundException('Reserva no encontrada.');
           if (current.status === ReservationStatus.CANCELLED) {
             throw new BadRequestException('No se puede reprogramar una reserva cancelada.');
@@ -502,7 +515,8 @@ export class ReservationsService {
           // Mismo bloqueo de solapamiento, excluyendo la propia reserva.
           const conflicts = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
             SELECT id FROM "reservations"
-            WHERE "courtId" = ${current.courtId}::uuid
+            WHERE "tenantId" = ${tenantId}::uuid
+              AND "courtId" = ${current.courtId}::uuid
               AND id <> ${id}::uuid
               AND status <> 'CANCELLED'
               AND "startTime" < ${dto.endTime}
@@ -538,7 +552,10 @@ export class ReservationsService {
   // =========================================================================
 
   async findByIdOrThrow(id: string): Promise<Reservation> {
-    const r = await this.prisma.reservation.findUnique({ where: { id } });
+    // Scopeado por tenant: impide operar sobre reservas de otro complejo.
+    const r = await this.prisma.reservation.findFirst({
+      where: { id, tenantId: requireTenantId() },
+    });
     if (!r) throw new NotFoundException('Reserva no encontrada.');
     return r;
   }

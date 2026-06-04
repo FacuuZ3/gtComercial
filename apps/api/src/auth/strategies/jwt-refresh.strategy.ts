@@ -17,6 +17,7 @@ interface RefreshTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  tenantId: string;
 }
 
 function extractFromBody(req: Request): string | null {
@@ -36,6 +37,12 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
 
   validate(payload: RefreshTokenPayload): AuthUser {
     if (!payload?.sub) throw new UnauthorizedException('Refresh token inválido.');
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    if (!payload.tenantId) throw new UnauthorizedException('Refresh token sin tenant.');
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      tenantId: payload.tenantId,
+    };
   }
 }

@@ -12,11 +12,13 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from '@prisma/client';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
+import { setTenantId } from '../../common/tenancy/tenant-context';
 
 interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  tenantId: string;
 }
 
 @Injectable()
@@ -31,6 +33,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   validate(payload: AccessTokenPayload): AuthUser {
     if (!payload?.sub) throw new UnauthorizedException('Token inválido.');
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    if (!payload.tenantId) throw new UnauthorizedException('Token sin tenant.');
+
+    // El token es la fuente de verdad del tenant para usuarios autenticados:
+    // sobreescribe lo que haya resuelto el TenantMiddleware (subdominio/header).
+    setTenantId(payload.tenantId);
+
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      tenantId: payload.tenantId,
+    };
   }
 }

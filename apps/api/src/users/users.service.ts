@@ -14,6 +14,7 @@ import {
 import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 export interface CreateUserData {
   name: string;
@@ -22,16 +23,24 @@ export interface CreateUserData {
   phone?: string;
   role?: Role;
   emailVerifyToken: string;
+  /**
+   * Tenant del usuario. Opcional: si se omite, se toma del contexto de
+   * tenant del request (subdominio/header). Se pasa explícito en el
+   * onboarding de un complejo nuevo, donde el tenant recién se crea.
+   */
+  tenantId?: string;
 }
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Crea un nuevo usuario con contraseña ya hasheada. */
+  /** Crea un nuevo usuario con contraseña ya hasheada, dentro de un tenant. */
   create(data: CreateUserData): Promise<User> {
+    const tenantId = data.tenantId ?? requireTenantId();
     return this.prisma.user.create({
       data: {
+        tenantId,
         name: data.name,
         email: data.email.toLowerCase(),
         password: data.passwordHash,
@@ -43,9 +52,15 @@ export class UsersService {
     });
   }
 
-  /** Busca por email (para login). Devuelve null si no existe. */
+  /**
+   * Busca por email DENTRO del tenant actual (para login). El email ya no es
+   * único global: el mismo email puede existir en complejos distintos.
+   * Devuelve null si no existe en este tenant.
+   */
   findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    return this.prisma.user.findFirst({
+      where: { tenantId: requireTenantId(), email: email.toLowerCase() },
+    });
   }
 
   /** Busca por id; lanza NotFoundException si no existe. */

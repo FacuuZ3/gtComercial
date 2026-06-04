@@ -18,6 +18,7 @@ import {
 import { RecurringReservation } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRecurringReservationDto } from './dto/create-recurring.dto';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 @Injectable()
 export class RecurringReservationsService {
@@ -26,7 +27,7 @@ export class RecurringReservationsService {
   /** Lista los turnos fijos activos. Si se pasa courtId, filtra por cancha. */
   list(courtId?: string): Promise<RecurringReservation[]> {
     return this.prisma.recurringReservation.findMany({
-      where: { isActive: true, ...(courtId ? { courtId } : {}) },
+      where: { tenantId: requireTenantId(), isActive: true, ...(courtId ? { courtId } : {}) },
       orderBy: [{ dayOfWeek: 'asc' }, { startMinute: 'asc' }],
       include: { court: true },
     });
@@ -39,17 +40,24 @@ export class RecurringReservationsService {
    *  - No haya otro turno fijo activo solapado en el mismo día de semana.
    */
   async create(dto: CreateRecurringReservationDto): Promise<RecurringReservation> {
+    const tenantId = requireTenantId();
+
     if (dto.startMinute >= dto.endMinute) {
       throw new BadRequestException('startMinute debe ser menor que endMinute.');
     }
 
-    const court = await this.prisma.court.findUnique({ where: { id: dto.courtId } });
+    // Cancha scopeada por tenant: no se puede crear un turno fijo sobre una
+    // cancha de otro complejo.
+    const court = await this.prisma.court.findFirst({
+      where: { id: dto.courtId, tenantId },
+    });
     if (!court) throw new NotFoundException('Cancha no encontrada.');
     if (!court.isActive) throw new BadRequestException('La cancha no está habilitada.');
 
     // Verificación de solapamiento: dos rangos [a,b) y [c,d) se solapan ⇔ a<d ∧ c<b.
     const conflict = await this.prisma.recurringReservation.findFirst({
       where: {
+        tenantId,
         courtId: dto.courtId,
         dayOfWeek: dto.dayOfWeek,
         isActive: true,
@@ -63,6 +71,7 @@ export class RecurringReservationsService {
 
     return this.prisma.recurringReservation.create({
       data: {
+        tenantId,
         courtId: dto.courtId,
         dayOfWeek: dto.dayOfWeek,
         startMinute: dto.startMinute,
@@ -72,9 +81,11 @@ export class RecurringReservationsService {
     });
   }
 
-  /** Suspende un turno fijo (soft delete). */
+  /** Suspende un turno fijo (soft delete). Scopeado por tenant. */
   async softDelete(id: string): Promise<RecurringReservation> {
-    const found = await this.prisma.recurringReservation.findUnique({ where: { id } });
+    const found = await this.prisma.recurringReservation.findFirst({
+      where: { id, tenantId: requireTenantId() },
+    });
     if (!found) throw new NotFoundException('Turno fijo no encontrado.');
     return this.prisma.recurringReservation.update({
       where: { id },

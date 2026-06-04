@@ -26,6 +26,7 @@
 
 import {
   PrismaClient,
+  Prisma,
   Role,
   SportType,
   ReservationStatus,
@@ -145,7 +146,7 @@ async function seedTenant(spec: SeedTenantSpec): Promise<void> {
   });
 
   const firstClient = clients[0];
-  const reservations = [
+  const reservations: Prisma.ReservationCreateManyInput[] = [
     {
       tenantId: tenant.id,
       userId: firstClient.id,
