@@ -2,37 +2,44 @@
  * ===========================================================================
  *  seed.ts - Carga de datos iniciales para entorno de desarrollo y pruebas.
  * ---------------------------------------------------------------------------
- *  Crea:
- *    - 1 usuario administrador.
- *    - 2 usuarios estándar (clientes).
- *    - 2 canchas de pádel activas.
- *    - 3 reservas de ejemplo (mañana, tarde y noche del día siguiente).
+ *  Multi-tenant: crea DOS complejos (tenants) independientes para poder
+ *  demostrar el aislamiento de datos:
  *
- *  Idempotencia: utiliza upsert por email / nombre de cancha para poder
- *  ejecutar el seed varias veces sin generar duplicados.
+ *    Tenant "norte" (Complejo Pádel Norte)
+ *      - 1 admin + 2 clientes
+ *      - 2 canchas
+ *      - 3 reservas de ejemplo
+ *      - info del club
+ *
+ *    Tenant "sur" (Club Raqueta Sur)
+ *      - 1 admin + 1 cliente
+ *      - 1 cancha
+ *      - 1 reserva de ejemplo
+ *      - info del club
+ *
+ *  Idempotencia: usa upsert por (tenantId, email) y por slug de tenant.
  *
  *  Ejecución:
  *    npm run seed      (desde apps/api)
  * ===========================================================================
  */
 
-import { PrismaClient, Role, SportType, ReservationStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  SportType,
+  ReservationStatus,
+  TenantPlan,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-/**
- * Hashea una contraseña con bcrypt (10 rounds — equilibrio entre coste
- * computacional y seguridad para un entorno académico).
- */
 async function hash(plain: string): Promise<string> {
   return bcrypt.hash(plain, 10);
 }
 
-/**
- * Devuelve una nueva fecha desplazada N días desde hoy a la hora indicada
- * (en horario local del servidor). Útil para programar reservas demo.
- */
+/** Fecha desplazada N días desde hoy, a la hora indicada (hora local). */
 function dateInDays(days: number, hour: number, minute = 0): Date {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -40,21 +47,46 @@ function dateInDays(days: number, hour: number, minute = 0): Date {
   return d;
 }
 
-async function main(): Promise<void> {
-  console.log('🌱  Iniciando seed de la base de datos...');
+interface SeedCourt {
+  name: string;
+  description: string;
+  pricePerHour: number;
+}
 
-  // -------------------------------------------------------------------------
-  // 1) Usuarios
-  // -------------------------------------------------------------------------
+interface SeedTenantSpec {
+  slug: string;
+  name: string;
+  plan: TenantPlan;
+  adminEmail: string;
+  clientEmails: string[];
+  courts: SeedCourt[];
+  clubAddress: string;
+}
+
+/**
+ * Crea (o actualiza) un tenant completo con sus usuarios, canchas, reservas
+ * de ejemplo e info del club. Todo lo creado lleva el tenantId correspondiente.
+ */
+async function seedTenant(spec: SeedTenantSpec): Promise<void> {
   const adminPassword = await hash('Admin123!');
   const userPassword = await hash('User123!');
 
+  // 1) Tenant
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: spec.slug },
+    update: { name: spec.name, plan: spec.plan },
+    create: { slug: spec.slug, name: spec.name, plan: spec.plan },
+  });
+  console.log(`\n🏢  Tenant "${tenant.name}" (slug=${tenant.slug})`);
+
+  // 2) Admin
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@padelturnos.local' },
+    where: { tenantId_email: { tenantId: tenant.id, email: spec.adminEmail } },
     update: {},
     create: {
-      name: 'Administrador del Complejo',
-      email: 'admin@padelturnos.local',
+      tenantId: tenant.id,
+      name: `Administrador · ${spec.name}`,
+      email: spec.adminEmail,
       password: adminPassword,
       phone: '+543482000000',
       role: Role.ADMIN,
@@ -62,147 +94,156 @@ async function main(): Promise<void> {
     },
   });
 
-  const user1 = await prisma.user.upsert({
-    where: { email: 'juan.perez@example.com' },
-    update: {},
-    create: {
-      name: 'Juan Pérez',
-      email: 'juan.perez@example.com',
-      password: userPassword,
-      phone: '+543482111111',
-      role: Role.USER,
-      isEmailVerified: true,
-    },
-  });
-
-  const user2 = await prisma.user.upsert({
-    where: { email: 'maria.gomez@example.com' },
-    update: {},
-    create: {
-      name: 'María Gómez',
-      email: 'maria.gomez@example.com',
-      password: userPassword,
-      phone: '+543482222222',
-      role: Role.USER,
-      isEmailVerified: true,
-    },
-  });
-
-  console.log(`👤  Usuarios listos: admin=${admin.email}, u1=${user1.email}, u2=${user2.email}`);
-
-  // -------------------------------------------------------------------------
-  // 2) Canchas
-  // -------------------------------------------------------------------------
-  // Como `name` no es UNIQUE en la base, primero buscamos por nombre y
-  // creamos solo si no existe (upsert manual idempotente).
-  let courtNorte = await prisma.court.findFirst({ where: { name: 'Cancha Norte' } });
-  if (!courtNorte) {
-    courtNorte = await prisma.court.create({
-      data: {
-        name: 'Cancha Norte',
-        sportType: SportType.PADEL,
-        description: 'Cancha techada con paredes de blindex y césped sintético azul.',
-        isActive: true,
-        pricePerHour: 6000.00,
+  // 3) Clientes
+  const clients = [];
+  for (let i = 0; i < spec.clientEmails.length; i++) {
+    const email = spec.clientEmails[i];
+    const client = await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email } },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        name: email.split('@')[0].replace(/\./g, ' '),
+        email,
+        password: userPassword,
+        phone: `+54348211${i}${i}${i}${i}`,
+        role: Role.USER,
+        isEmailVerified: true,
       },
     });
+    clients.push(client);
   }
+  console.log(`   👤  ${1 + clients.length} usuarios (1 admin + ${clients.length} clientes)`);
 
-  let courtSur = await prisma.court.findFirst({ where: { name: 'Cancha Sur' } });
-  if (!courtSur) {
-    courtSur = await prisma.court.create({
-      data: {
-        name: 'Cancha Sur',
-        sportType: SportType.PADEL,
-        description: 'Cancha al aire libre con iluminación LED y césped verde.',
-        isActive: true,
-        pricePerHour: 5500.00,
-      },
+  // 4) Canchas
+  const courts = [];
+  for (const c of spec.courts) {
+    let court = await prisma.court.findFirst({
+      where: { tenantId: tenant.id, name: c.name },
     });
+    if (!court) {
+      court = await prisma.court.create({
+        data: {
+          tenantId: tenant.id,
+          name: c.name,
+          sportType: SportType.PADEL,
+          description: c.description,
+          isActive: true,
+          pricePerHour: c.pricePerHour,
+        },
+      });
+    }
+    courts.push(court);
   }
+  console.log(`   🎾  ${courts.length} canchas`);
 
-  console.log(`🎾  Canchas listas: ${courtNorte.name}, ${courtSur.name}`);
-
-  // -------------------------------------------------------------------------
-  // 3) Reservas de ejemplo (día siguiente)
-  // -------------------------------------------------------------------------
-  // Slots de 90 minutos según la lógica de disponibilidad del Paso 4.
-  //   - Mañana:  09:00 - 10:30   → Juan en Cancha Norte (CONFIRMED)
-  //   - Tarde:   16:30 - 18:00   → María en Cancha Sur  (CONFIRMED)
-  //   - Noche:   21:00 - 22:30   → Juan en Cancha Norte (PENDING)
-  // Antes de insertar limpiamos las reservas previas del mismo día para
-  // garantizar la idempotencia del seed.
+  // 5) Reservas de ejemplo (mañana). Idempotente: limpia las del día primero.
   const tomorrow = dateInDays(1, 0);
   const dayAfter = dateInDays(2, 0);
-
   await prisma.reservation.deleteMany({
-    where: {
-      startTime: { gte: tomorrow, lt: dayAfter },
+    where: { tenantId: tenant.id, startTime: { gte: tomorrow, lt: dayAfter } },
+  });
+
+  const firstClient = clients[0];
+  const reservations = [
+    {
+      tenantId: tenant.id,
+      userId: firstClient.id,
+      courtId: courts[0].id,
+      startTime: dateInDays(1, 9, 0),
+      endTime: dateInDays(1, 10, 30),
+      status: ReservationStatus.CONFIRMED,
+      notes: 'Partido de práctica matutino.',
     },
-  });
+  ];
+  // Si hay 2do cliente y 2da cancha, agregamos otra reserva.
+  if (clients[1] && courts[1]) {
+    reservations.push({
+      tenantId: tenant.id,
+      userId: clients[1].id,
+      courtId: courts[1].id,
+      startTime: dateInDays(1, 16, 30),
+      endTime: dateInDays(1, 18, 0),
+      status: ReservationStatus.CONFIRMED,
+      notes: 'Clase con profesor.',
+    });
+    reservations.push({
+      tenantId: tenant.id,
+      userId: firstClient.id,
+      courtId: courts[0].id,
+      startTime: dateInDays(1, 21, 0),
+      endTime: dateInDays(1, 22, 30),
+      status: ReservationStatus.PENDING,
+      notes: 'Pendiente de confirmación del cuarto jugador.',
+    });
+  }
+  await prisma.reservation.createMany({ data: reservations });
+  console.log(`   📅  ${reservations.length} reservas de ejemplo`);
 
-  await prisma.reservation.createMany({
-    data: [
-      {
-        userId: user1.id,
-        courtId: courtNorte.id,
-        startTime: dateInDays(1, 9, 0),
-        endTime: dateInDays(1, 10, 30),
-        status: ReservationStatus.CONFIRMED,
-        notes: 'Partido de práctica matutino.',
-      },
-      {
-        userId: user2.id,
-        courtId: courtSur.id,
-        startTime: dateInDays(1, 16, 30),
-        endTime: dateInDays(1, 18, 0),
-        status: ReservationStatus.CONFIRMED,
-        notes: 'Clase con profesor.',
-      },
-      {
-        userId: user1.id,
-        courtId: courtNorte.id,
-        startTime: dateInDays(1, 21, 0),
-        endTime: dateInDays(1, 22, 30),
-        status: ReservationStatus.PENDING,
-        notes: 'Pendiente de confirmación del cuarto jugador.',
-      },
-    ],
-  });
-
-  console.log('📅  3 reservas de ejemplo creadas.');
-
-  // -------------------------------------------------------------------------
-  // 4) Información del club (singleton)
-  // -------------------------------------------------------------------------
+  // 6) Info del club (una por tenant)
   await prisma.clubInfo.upsert({
-    where: { id: 'default' },
+    where: { tenantId: tenant.id },
     update: {},
     create: {
-      id: 'default',
-      address: 'Av. San Martín 1234, Reconquista, Santa Fe',
+      tenantId: tenant.id,
+      address: spec.clubAddress,
       mapEmbedUrl: null,
       weekdayHours: '13:00 a 23:00',
       weekendHours: '13:00 a 23:00',
       holidayHours: '13:00 a 23:00',
-      services: [
-        'Wi-Fi',
-        'Vestuario',
-        'Bar / Restaurante',
-        'Disposición de paletas',
-        'Estacionamiento',
-      ],
+      services: ['Wi-Fi', 'Vestuario', 'Bar / Restaurante', 'Estacionamiento'],
     },
   });
-  console.log('🏟️   Info del club lista.');
+  console.log(`   🏟️   Info del club lista`);
+}
 
-  console.log('✅  Seed completado con éxito.');
+async function main(): Promise<void> {
+  console.log('🌱  Iniciando seed multi-tenant...');
+
+  await seedTenant({
+    slug: 'norte',
+    name: 'Complejo Pádel Norte',
+    plan: TenantPlan.PRO,
+    adminEmail: 'admin@norte.local',
+    clientEmails: ['juan.perez@example.com', 'maria.gomez@example.com'],
+    courts: [
+      {
+        name: 'Cancha Norte',
+        description: 'Cancha techada con paredes de blindex y césped sintético azul.',
+        pricePerHour: 6000.0,
+      },
+      {
+        name: 'Cancha Sur',
+        description: 'Cancha al aire libre con iluminación LED y césped verde.',
+        pricePerHour: 5500.0,
+      },
+    ],
+    clubAddress: 'Av. San Martín 1234, Reconquista, Santa Fe',
+  });
+
+  await seedTenant({
+    slug: 'sur',
+    name: 'Club Raqueta Sur',
+    plan: TenantPlan.BASIC,
+    adminEmail: 'admin@sur.local',
+    clientEmails: ['pedro.lopez@example.com'],
+    courts: [
+      {
+        name: 'Pista Central',
+        description: 'Cancha panorámica con vidrio en las cuatro paredes.',
+        pricePerHour: 7000.0,
+      },
+    ],
+    clubAddress: 'Belgrano 567, Avellaneda, Santa Fe',
+  });
+
+  console.log('\n✅  Seed multi-tenant completado.');
+  console.log('   Credenciales: admin@norte.local / admin@sur.local  (pass: Admin123!)');
+  console.log('   Clientes: juan.perez@example.com, etc.  (pass: User123!)');
 }
 
 main()
   .catch((error) => {
-    // Logger explícito a nivel de script de mantenimiento; no se usa
-    // LoggerService aquí porque seed.ts se ejecuta fuera del contexto Nest.
     console.error('❌  Error ejecutando el seed:', error);
     process.exit(1);
   })
