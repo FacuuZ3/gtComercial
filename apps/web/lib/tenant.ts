@@ -62,6 +62,19 @@ export function getTenantSlugFromHost(host: string | null | undefined): string {
   return DEFAULT_TENANT;
 }
 
+/**
+ * Slug del complejo SOLO si el host tiene un subdominio real (sin fallback al
+ * tenant por defecto). Devuelve null en el dominio raíz.
+ *
+ * Sirve para decidir qué mostrar en `/`:
+ *   - null  → dominio raíz → página de marketing de la plataforma.
+ *   - slug  → subdominio de un complejo → landing de ese complejo.
+ */
+export function getSubdomainTenantOrNull(host: string | null | undefined): string | null {
+  if (!host) return null;
+  return slugFromHostname(host);
+}
+
 /** Header listo para mezclar en un fetch del cliente. */
 export function tenantHeader(): Record<string, string> {
   return { 'X-Tenant-Id': getTenantSlug() };
