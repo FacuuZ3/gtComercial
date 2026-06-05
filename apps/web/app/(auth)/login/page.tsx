@@ -105,6 +105,12 @@ export default function LoginPage() {
                 Registrate
               </Link>
             </p>
+            <p className="text-xs text-zinc-500">
+              ¿Tenés un complejo?{' '}
+              <Link href="/onboarding" className="font-medium text-brand-700 hover:underline">
+                Registralo gratis
+              </Link>
+            </p>
           </CardFooter>
         </form>
       </Card>

@@ -26,6 +26,19 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { OnboardDto } from './dto/onboard.dto';
+
+/** Slugs no disponibles para complejos (colisionan con subdominios del sistema). */
+const RESERVED_SLUGS = new Set(['www', 'api', 'app', 'admin', 'localhost', 'mail', 'static']);
+
+/** Valores por defecto de la info pública de un complejo recién creado. */
+const NEW_CLUB_DEFAULTS = {
+  mapEmbedUrl: null as string | null,
+  weekdayHours: '13:00 a 23:00',
+  weekendHours: '13:00 a 23:00',
+  holidayHours: '13:00 a 23:00',
+  services: ['Wi-Fi', 'Vestuario'],
+};
 
 const BCRYPT_ROUNDS = 10;
 
@@ -127,6 +140,69 @@ export class AuthService {
     return {
       ...tokens,
       user: { ...this.toSafeUser(user), tenantName: tenant?.name ?? '' },
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Onboarding de un complejo nuevo (self-service)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Da de alta un complejo (tenant) nuevo junto con su primer administrador,
+   * de forma atómica. El admin queda auto-verificado (es el dueño) y se
+   * devuelven tokens para entrar directo al panel.
+   */
+  async onboard(
+    dto: OnboardDto,
+  ): Promise<TokenPair & { user: SafeUser & { tenantName: string } }> {
+    const slug = dto.slug.toLowerCase();
+
+    if (RESERVED_SLUGS.has(slug)) {
+      throw new BadRequestException('Ese identificador no está disponible.');
+    }
+
+    // Unicidad del slug (más allá del constraint de BD, para dar un 409 claro).
+    const existingTenant = await this.prisma.tenant.findUnique({ where: { slug } });
+    if (existingTenant) {
+      throw new ConflictException('Ya existe un complejo con ese identificador.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.adminPassword, BCRYPT_ROUNDS);
+
+    // Transacción: tenant + info del club + admin. Si algo falla, no queda
+    // ningún registro huérfano.
+    const { admin, tenant } = await this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: { name: dto.complexName, slug },
+      });
+
+      await tx.clubInfo.create({
+        data: {
+          tenantId: tenant.id,
+          address: `${dto.complexName} — completá tu dirección`,
+          ...NEW_CLUB_DEFAULTS,
+        },
+      });
+
+      const admin = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          name: dto.adminName,
+          email: dto.adminEmail.toLowerCase(),
+          password: passwordHash,
+          phone: dto.adminPhone,
+          role: Role.ADMIN,
+          isEmailVerified: true, // el dueño del complejo se verifica solo
+        },
+      });
+
+      return { admin, tenant };
+    });
+
+    const tokens = await this.signTokens(admin);
+    return {
+      ...tokens,
+      user: { ...this.toSafeUser(admin), tenantName: tenant.name },
     };
   }
 
