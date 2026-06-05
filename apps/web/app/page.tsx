@@ -18,8 +18,9 @@ import { HeroCTAs } from '@/components/landing/hero-ctas';
 import { CourtImage } from '@/components/landing/court-image';
 import { ClubInfoDto, CourtDto } from '@/lib/types';
 import { formatPriceARS } from '@/lib/utils';
-import { getTenantSlugFromHost } from '@/lib/tenant';
+import { getTenantSlugFromHost, getSubdomainTenantOrNull } from '@/lib/tenant';
 import { APP_NAME } from '@/lib/brand';
+import { MarketingHome } from '@/components/marketing/marketing-home';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -89,8 +90,18 @@ async function fetchClubInfo(tenantSlug: string): Promise<ClubInfoDto | null> {
  * plataforma.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const tenantSlug = getTenantSlugFromHost(headers().get('host'));
-  const clubInfo = await fetchClubInfo(tenantSlug);
+  const host = headers().get('host');
+
+  // Dominio raíz → metadata de la plataforma.
+  if (!getSubdomainTenantOrNull(host)) {
+    return {
+      title: `${APP_NAME} — Reservas online para complejos deportivos`,
+      description: `${APP_NAME} es la plataforma para que tu complejo reciba reservas online.`,
+    };
+  }
+
+  // Subdominio de complejo → metadata del complejo.
+  const clubInfo = await fetchClubInfo(getTenantSlugFromHost(host));
   const name = clubInfo?.clubName || APP_NAME;
   return {
     title: `${name} — Reservá tu cancha`,
@@ -99,8 +110,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LandingPage() {
-  // El tenant se resuelve del host (subdominio en prod, default en dev).
-  const tenantSlug = getTenantSlugFromHost(headers().get('host'));
+  const host = headers().get('host');
+
+  // Dominio raíz (sin subdominio de complejo) → marketing de la plataforma.
+  // Subdominio de un complejo → landing de ese complejo.
+  if (!getSubdomainTenantOrNull(host)) {
+    return <MarketingHome />;
+  }
+
+  const tenantSlug = getTenantSlugFromHost(host);
   const [courts, clubInfo] = await Promise.all([
     fetchCourts(tenantSlug),
     fetchClubInfo(tenantSlug),
