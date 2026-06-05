@@ -65,3 +65,25 @@ export const registerSchema = z.object({
     .or(z.literal('')),
 });
 export type RegisterValues = z.infer<typeof registerSchema>;
+
+/** Alta de un complejo nuevo (tenant) + su primer administrador. */
+export const onboardSchema = z.object({
+  complexName: z.string().min(2, 'El nombre del complejo es demasiado corto.').max(120),
+  slug: z
+    .string()
+    .min(3, 'Mínimo 3 caracteres.')
+    .max(40, 'Máximo 40 caracteres.')
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      'Solo minúsculas, números y guiones (sin espacios).',
+    ),
+  adminName: z.string().min(2, 'El nombre es demasiado corto.').max(120),
+  adminEmail: z.string().email('Email inválido.'),
+  adminPassword: z.string().min(8, 'Mínimo 8 caracteres.').max(72),
+  adminPhone: z
+    .string()
+    .regex(/^\+?\d{8,15}$/, 'Teléfono inválido.')
+    .optional()
+    .or(z.literal('')),
+});
+export type OnboardValues = z.infer<typeof onboardSchema>;
