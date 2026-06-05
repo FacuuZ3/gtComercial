@@ -22,6 +22,36 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { setupSwagger } from './config/swagger.config';
 import { buildLoggerOptions } from './config/logger.config';
 
+/**
+ * Construye la política de CORS para multi-tenant: además del dominio del
+ * frontend, acepta CUALQUIER subdominio del mismo (norte.dominio, sur.dominio,
+ * etc.), ya que cada complejo se sirve desde su propio subdominio.
+ *
+ * Funciona igual en dev (localhost:3000 + norte.localhost:3000) y en
+ * producción (dominio.com + norte.dominio.com).
+ */
+function buildCorsOrigin(frontendUrl: string) {
+  const baseHost = new URL(frontendUrl).host; // p.ej. "localhost:3000" o "reserva.app"
+  return (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ): void => {
+    // Requests sin Origin (curl, server-to-server, health checks) → permitir.
+    if (!origin) return callback(null, true);
+    let host: string;
+    try {
+      host = new URL(origin).host;
+    } catch {
+      return callback(null, false);
+    }
+    // Mismo host (dominio raíz) o cualquier subdominio de él.
+    if (host === baseHost || host.endsWith(`.${baseHost}`)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  };
+}
+
 async function bootstrap(): Promise<void> {
   // Logger Winston se setea antes de NestFactory para capturar incluso los
   // logs del bootstrap interno de Nest.
@@ -38,9 +68,9 @@ async function bootstrap(): Promise<void> {
   // Helmet: cabeceras de seguridad recomendadas (XSS, sniffing, etc.).
   app.use(helmet());
 
-  // CORS: solo el frontend declarado, con credenciales.
+  // CORS: el dominio del frontend y todos sus subdominios (uno por complejo).
   app.enableCors({
-    origin: config.getOrThrow<string>('FRONTEND_URL'),
+    origin: buildCorsOrigin(config.getOrThrow<string>('FRONTEND_URL')),
     credentials: true,
   });
 
