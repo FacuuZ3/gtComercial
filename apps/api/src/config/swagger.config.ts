@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 export function setupSwagger(app: INestApplication): void {
-  const appName = app.get(ConfigService).get<string>('APP_NAME') ?? 'Reservá';
+  const appName = app.get(ConfigService).get<string>('APP_NAME') ?? 'Cancha Libre';
   const config = new DocumentBuilder()
     .setTitle(`${appName} API`)
     .setDescription(

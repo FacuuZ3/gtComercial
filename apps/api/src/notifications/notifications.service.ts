@@ -29,7 +29,7 @@ export class NotificationsService {
     // Registro inicial de canales disponibles. La extensión a WhatsApp solo
     // requiere instanciar WhatsAppChannel y agregarlo aquí.
     this.channels.set(this.emailChannel.name, this.emailChannel);
-    this.appName = this.config.get<string>('APP_NAME') ?? 'Reservá';
+    this.appName = this.config.get<string>('APP_NAME') ?? 'Cancha Libre';
   }
 
   private async dispatch(channel: string, payload: NotificationPayload): Promise<void> {

@@ -15,7 +15,7 @@ export const envValidationSchema = Joi.object({
 
   // Nombre genérico de la plataforma (marca del SaaS). Usado en Swagger y como
   // fallback en los emails. Cada complejo muestra su propio nombre en la app.
-  APP_NAME: Joi.string().default('Reservá'),
+  APP_NAME: Joi.string().default('Cancha Libre'),
 
   DATABASE_URL: Joi.string().uri({ scheme: ['postgresql', 'postgres'] }).required(),
 

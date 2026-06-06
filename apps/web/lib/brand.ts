@@ -10,4 +10,4 @@
  * falta tocar código.
  */
 
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'Reservá';
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'Cancha Libre';
