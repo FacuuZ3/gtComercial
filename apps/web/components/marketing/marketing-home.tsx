@@ -276,12 +276,18 @@ function MarketingFooter() {
     <footer className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="container flex flex-col items-center justify-between gap-3 py-10 text-xs text-zinc-500 sm:flex-row dark:text-zinc-400">
         <span>© {new Date().getFullYear()} {APP_NAME}. Todos los derechos reservados.</span>
-        <nav className="flex items-center gap-x-6">
+        <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <Link href="/login" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Ingresar
           </Link>
           <Link href="/onboarding" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Registrar complejo
+          </Link>
+          <Link href="/terminos" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Términos
+          </Link>
+          <Link href="/privacidad" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Privacidad
           </Link>
         </nav>
       </div>

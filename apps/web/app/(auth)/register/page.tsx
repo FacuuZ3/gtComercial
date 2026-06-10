@@ -110,6 +110,17 @@ export default function RegisterPage() {
             <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
               Crear cuenta
             </Button>
+            <p className="text-center text-xs text-zinc-500">
+              Al crear la cuenta aceptás los{' '}
+              <Link href="/terminos" className="font-medium text-brand-700 hover:underline">
+                Términos y Condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link href="/privacidad" className="font-medium text-brand-700 hover:underline">
+                Política de Privacidad
+              </Link>
+              .
+            </p>
             <p className="text-xs text-zinc-500">
               ¿Ya tenés cuenta?{' '}
               <Link href="/login" className="font-medium text-brand-700 hover:underline">

@@ -199,6 +199,17 @@ export default function OnboardingPage() {
             <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
               Crear complejo
             </Button>
+            <p className="text-center text-xs text-zinc-500">
+              Al crear el complejo aceptás los{' '}
+              <Link href="/terminos" className="font-medium text-brand-700 hover:underline">
+                Términos y Condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link href="/privacidad" className="font-medium text-brand-700 hover:underline">
+                Política de Privacidad
+              </Link>
+              .
+            </p>
             <p className="text-xs text-zinc-500">
               ¿Ya tenés un complejo?{' '}
               <Link href="/login" className="font-medium text-brand-700 hover:underline">
