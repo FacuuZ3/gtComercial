@@ -88,9 +88,14 @@ export class AuthService {
       emailVerifyToken,
     });
 
-    // 5) Envío del email de verificación. Errores SMTP se loguean en el canal
-    //    pero no rompen el registro (en producción se podría reintentar con cola).
-    await this.notifications.sendVerificationEmail(user.email, user.name, emailVerifyToken);
+    // 5) Envío del email de verificación con la marca del complejo. Errores
+    //    SMTP se loguean en el canal pero no rompen el registro.
+    await this.notifications.sendVerificationEmail(
+      user.email,
+      user.name,
+      emailVerifyToken,
+      await this.tenantName(user.tenantId),
+    );
 
     return {
       id: user.id,
@@ -130,16 +135,14 @@ export class AuthService {
       throw new UnauthorizedException('La cuenta aún no fue verificada por email.');
     }
 
-    // Nombre del complejo para el branding white-label del frontend.
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: user.tenantId },
-      select: { name: true },
-    });
-
     const tokens = await this.signTokens(user);
     return {
       ...tokens,
-      user: { ...this.toSafeUser(user), tenantName: tenant?.name ?? '' },
+      user: {
+        ...this.toSafeUser(user),
+        // Nombre del complejo para el branding white-label del frontend.
+        tenantName: await this.tenantName(user.tenantId),
+      },
     };
   }
 
@@ -224,7 +227,12 @@ export class AuthService {
     const user = await this.users.assignPasswordResetToken(email, token, expiresAt);
     if (user) {
       // Sólo enviamos el email si el usuario existe; el caller no se entera.
-      await this.notifications.sendPasswordResetEmail(user.email, user.name, token);
+      await this.notifications.sendPasswordResetEmail(
+        user.email,
+        user.name,
+        token,
+        await this.tenantName(user.tenantId),
+      );
     }
 
     return {
@@ -258,6 +266,15 @@ export class AuthService {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  /** Nombre del complejo (tenant) para branding white-label de emails y UI. */
+  private async tenantName(tenantId: string): Promise<string> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+    return tenant?.name ?? '';
+  }
 
   private async signTokens(user: User): Promise<TokenPair> {
     const payload = {

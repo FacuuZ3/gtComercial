@@ -60,13 +60,16 @@ export class ReminderService {
     const now = new Date();
     const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_HOURS * 3600 * 1000);
 
+    // Nota multi-tenant: este cron corre SIN contexto de tenant a propósito —
+    // procesa los recordatorios de TODOS los complejos en un solo tick. El
+    // nombre del complejo se trae por reserva para brandear cada email.
     const pending = await this.prisma.reservation.findMany({
       where: {
         status: ReservationStatus.CONFIRMED,
         reminderSent: false,
         startTime: { gt: now, lte: windowEnd },
       },
-      include: { user: true, court: true },
+      include: { user: true, court: true, tenant: { select: { name: true } } },
     });
 
     if (pending.length === 0) return 0;
@@ -79,6 +82,7 @@ export class ReminderService {
           r.user.name,
           r.court.name,
           r.startTime,
+          r.tenant.name,
         );
         await this.prisma.reservation.update({
           where: { id: r.id },

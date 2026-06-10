@@ -563,7 +563,7 @@ export class ReservationsService {
   private async buildEventPayload(reservationId: string): Promise<ReservationEventPayload | null> {
     const r = await this.prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { user: true, court: true },
+      include: { user: true, court: true, tenant: { select: { name: true } } },
     });
     if (!r) return null;
     return {
@@ -571,6 +571,8 @@ export class ReservationsService {
       userName: r.user.name,
       courtName: r.court.name,
       startTime: r.startTime,
+      // Nombre del complejo para que el email salga con SU marca (white-label).
+      clubName: r.tenant.name,
     };
   }
 

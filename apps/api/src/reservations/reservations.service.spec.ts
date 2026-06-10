@@ -90,6 +90,7 @@ const buildPrismaMock = (): PrismaMock => {
         id: 'res-1',
         user: { email: 'test@test.local', name: 'Tester' },
         court: { name: activeCourt.name },
+        tenant: { name: 'Complejo Test' },
         startTime: tomorrowAt(10),
       }),
       findMany: jest.fn(),

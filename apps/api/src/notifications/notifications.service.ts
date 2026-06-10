@@ -41,22 +41,36 @@ export class NotificationsService {
     await target.send(payload);
   }
 
+  /**
+   * Marca a mostrar en un email: el nombre del complejo (white-label) cuando
+   * se conoce; si no, el nombre genérico de la plataforma.
+   */
+  private brand(clubName?: string): string {
+    return clubName || this.appName;
+  }
+
   /** Envía el email de verificación con el link al frontend. */
-  async sendVerificationEmail(to: string, name: string, token: string): Promise<void> {
+  async sendVerificationEmail(
+    to: string,
+    name: string,
+    token: string,
+    clubName?: string,
+  ): Promise<void> {
+    const brand = this.brand(clubName);
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     const link = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
 
     await this.dispatch('email', {
       to,
-      subject: `Verificá tu cuenta — ${this.appName}`,
+      subject: `Verificá tu cuenta — ${brand}`,
       text:
         `Hola ${name},\n\n` +
-        `Te damos la bienvenida a ${this.appName}. ` +
+        `Te damos la bienvenida a ${brand}. ` +
         `Para activar tu cuenta hacé clic en el siguiente enlace:\n${link}\n\n` +
         `Si no creaste esta cuenta, ignorá este mensaje.`,
       html:
         `<p>Hola <strong>${name}</strong>,</p>` +
-        `<p>Te damos la bienvenida a <strong>${this.appName}</strong>. ` +
+        `<p>Te damos la bienvenida a <strong>${brand}</strong>. ` +
         `Para activar tu cuenta hacé clic en el botón:</p>` +
         `<p><a href="${link}" style="background:#10b981;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Verificar mi cuenta</a></p>` +
         `<p>O copiá este enlace en el navegador:<br/><code>${link}</code></p>` +
@@ -70,11 +84,12 @@ export class NotificationsService {
     name: string,
     courtName: string,
     startTime: Date,
+    clubName?: string,
   ): Promise<void> {
     const when = startTime.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
     await this.dispatch('email', {
       to,
-      subject: `Turno confirmado — ${this.appName}`,
+      subject: `Turno confirmado — ${this.brand(clubName)}`,
       text:
         `Hola ${name},\n\n` +
         `Tu turno en ${courtName} fue confirmado para ${when}.\n` +
@@ -87,12 +102,17 @@ export class NotificationsService {
    * Envía el email con el link de reseteo de contraseña.
    * El token caduca en el plazo definido por AuthService (1 hora típicamente).
    */
-  async sendPasswordResetEmail(to: string, name: string, token: string): Promise<void> {
+  async sendPasswordResetEmail(
+    to: string,
+    name: string,
+    token: string,
+    clubName?: string,
+  ): Promise<void> {
     const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL');
     const link = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
     await this.dispatch('email', {
       to,
-      subject: `Restablecé tu contraseña — ${this.appName}`,
+      subject: `Restablecé tu contraseña — ${this.brand(clubName)}`,
       text:
         `Hola ${name},\n\n` +
         `Recibimos una solicitud para cambiar tu contraseña. ` +
@@ -117,6 +137,7 @@ export class NotificationsService {
     name: string,
     courtName: string,
     startTime: Date,
+    clubName?: string,
   ): Promise<void> {
     const when = startTime.toLocaleString('es-AR', {
       dateStyle: 'full',
@@ -124,7 +145,7 @@ export class NotificationsService {
     });
     await this.dispatch('email', {
       to,
-      subject: `Recordatorio: tu turno es mañana — ${this.appName}`,
+      subject: `Recordatorio: tu turno es mañana — ${this.brand(clubName)}`,
       text:
         `Hola ${name},\n\n` +
         `Te recordamos que tenés reservado un turno en ${courtName} para ${when}.\n` +
@@ -140,11 +161,12 @@ export class NotificationsService {
     name: string,
     courtName: string,
     startTime: Date,
+    clubName?: string,
   ): Promise<void> {
     const when = startTime.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
     await this.dispatch('email', {
       to,
-      subject: `Turno cancelado — ${this.appName}`,
+      subject: `Turno cancelado — ${this.brand(clubName)}`,
       text:
         `Hola ${name},\n\nTu turno en ${courtName} del ${when} ha sido cancelado.\n` +
         `Si tenés dudas, contactá al complejo.`,

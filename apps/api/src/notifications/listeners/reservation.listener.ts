@@ -17,6 +17,8 @@ export interface ReservationEventPayload {
   userName: string;
   courtName: string;
   startTime: Date;
+  /** Nombre del complejo (tenant): los emails salen con SU marca. */
+  clubName: string;
 }
 
 @Injectable()
@@ -33,6 +35,7 @@ export class ReservationListener {
       payload.userName,
       payload.courtName,
       payload.startTime,
+      payload.clubName,
     );
   }
 
@@ -44,6 +47,7 @@ export class ReservationListener {
       payload.userName,
       payload.courtName,
       payload.startTime,
+      payload.clubName,
     );
   }
 }
