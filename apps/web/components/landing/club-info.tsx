@@ -90,15 +90,27 @@ export function ClubInfoSection({ info }: Props) {
 //  Bloque: mapa + dirección
 // ============================================================================
 
+/**
+ * Solo se aceptan URLs del embed oficial de Google Maps. Defensa en
+ * profundidad contra XSS: aunque el backend valida lo mismo al guardar,
+ * acá se re-chequea antes de inyectar el valor como src del iframe.
+ */
+function isSafeMapEmbedUrl(url: string): boolean {
+  return url.startsWith('https://www.google.com/maps/embed');
+}
+
 function MapBlock({ info }: { info: ClubInfoDto }) {
+  const safeMapUrl =
+    info.mapEmbedUrl && isSafeMapEmbedUrl(info.mapEmbedUrl) ? info.mapEmbedUrl : null;
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="aspect-[16/10] bg-zinc-100 dark:bg-zinc-900">
-        {info.mapEmbedUrl ? (
+        {safeMapUrl ? (
           <iframe
-            src={info.mapEmbedUrl}
+            src={safeMapUrl}
             title="Ubicación del complejo"
             loading="lazy"
+            sandbox="allow-scripts allow-same-origin allow-popups"
             referrerPolicy="no-referrer-when-downgrade"
             className="h-full w-full border-0"
           />

@@ -21,9 +21,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runWithTenant } from './tenant-context';
-
-/** Dominios que no representan un tenant (no se interpretan como subdominio). */
-const RESERVED_SUBDOMAINS = new Set(['www', 'api', 'app', 'admin', 'localhost']);
+import { RESERVED_SLUGS } from './reserved-slugs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -107,7 +105,7 @@ export class TenantMiddleware implements NestMiddleware {
     // Necesitamos al menos sub.dominio.tld (3 partes) para tener subdominio.
     if (parts.length < 3) return null;
     const sub = parts[0].toLowerCase();
-    if (RESERVED_SUBDOMAINS.has(sub)) return null;
+    if (RESERVED_SLUGS.has(sub)) return null;
     return sub;
   }
 }

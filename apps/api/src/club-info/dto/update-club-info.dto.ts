@@ -9,6 +9,7 @@ import {
   IsArray,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
@@ -21,11 +22,19 @@ export class UpdateClubInfoDto {
 
   @ApiPropertyOptional({
     description:
-      'URL del iframe de Google Maps (atributo src). Pegar la URL del embed.',
+      'URL del iframe de Google Maps (atributo src). Pegar la URL del embed. ' +
+      'Solo se aceptan URLs de https://www.google.com/maps/embed.',
   })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
+  // Mitigación XSS: este valor se inyecta como src de un <iframe> en la
+  // landing pública. Restringirlo al embed oficial de Google Maps impide
+  // payloads tipo javascript:, data: o iframes a sitios arbitrarios.
+  @Matches(/^https:\/\/www\.google\.com\/maps\/embed/, {
+    message:
+      'La URL del mapa debe ser un embed de Google Maps (https://www.google.com/maps/embed...).',
+  })
   mapEmbedUrl?: string;
 
   @ApiPropertyOptional({ example: '13:00 a 23:00' })

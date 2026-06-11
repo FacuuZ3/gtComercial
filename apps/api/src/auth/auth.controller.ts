@@ -29,6 +29,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
@@ -45,6 +46,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  // Anti-abuso: limita altas de cuentas (y el spam de emails de verificación).
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar nuevo usuario y enviar email de verificación.' })
@@ -56,6 +59,9 @@ export class AuthController {
   }
 
   @Public()
+  // Anti-abuso: crear un complejo es la operación pública más "pesada"
+  // (inserta tenant + club + admin); límite estricto por IP.
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('onboard')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -77,6 +83,8 @@ export class AuthController {
   }
 
   @Public()
+  // Mitigación de fuerza bruta de credenciales por IP.
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Iniciar sesión. Devuelve accessToken + refreshToken + user.' })
@@ -98,6 +106,8 @@ export class AuthController {
   }
 
   @Public()
+  // Anti-abuso: evita usar el endpoint para spamear emails de reseteo.
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

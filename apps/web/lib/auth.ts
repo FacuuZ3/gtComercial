@@ -23,7 +23,10 @@ const isBrowser = (): boolean => typeof document !== 'undefined';
 function setCookie(name: string, value: string, days = 7): void {
   if (!isBrowser()) return;
   const expires = new Date(Date.now() + days * 86_400_000).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  // En producción (HTTPS) las cookies de sesión viajan con el flag Secure:
+  // el navegador no las envía por conexiones HTTP planas.
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax${secure}`;
 }
 
 function getCookie(name: string): string | null {

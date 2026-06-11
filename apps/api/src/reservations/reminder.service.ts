@@ -53,18 +53,21 @@ export class ReminderService {
 
   /**
    * Ejecuta un ciclo de envíos. Devuelve la cantidad enviada.
-   * Expuesto como método público para poder dispararlo manualmente desde
-   * un endpoint admin (útil en demos del proyecto final).
+   *
+   * @param tenantId Si se indica, procesa SOLO los recordatorios de ese
+   *   complejo (caso: disparo manual desde el panel de un admin). Si se
+   *   omite, procesa todos los complejos (caso: cron horario global).
    */
-  async runOnce(): Promise<number> {
+  async runOnce(tenantId?: string): Promise<number> {
     const now = new Date();
     const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_HOURS * 3600 * 1000);
 
-    // Nota multi-tenant: este cron corre SIN contexto de tenant a propósito —
+    // Nota multi-tenant: el cron corre SIN contexto de tenant a propósito —
     // procesa los recordatorios de TODOS los complejos en un solo tick. El
     // nombre del complejo se trae por reserva para brandear cada email.
     const pending = await this.prisma.reservation.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         status: ReservationStatus.CONFIRMED,
         reminderSent: false,
         startTime: { gt: now, lte: windowEnd },

@@ -18,7 +18,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User } from '@prisma/client';
+import { Prisma, Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { UsersService } from '../users/users.service';
@@ -27,9 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { OnboardDto } from './dto/onboard.dto';
-
-/** Slugs no disponibles para complejos (colisionan con subdominios del sistema). */
-const RESERVED_SLUGS = new Set(['www', 'api', 'app', 'admin', 'localhost', 'mail', 'static']);
+import { RESERVED_SLUGS } from '../common/tenancy/reserved-slugs';
 
 /** Valores por defecto de la info pública de un complejo recién creado. */
 const NEW_CLUB_DEFAULTS = {
@@ -174,33 +172,48 @@ export class AuthService {
 
     // Transacción: tenant + info del club + admin. Si algo falla, no queda
     // ningún registro huérfano.
-    const { admin, tenant } = await this.prisma.$transaction(async (tx) => {
-      const tenant = await tx.tenant.create({
-        data: { name: dto.complexName, slug },
-      });
+    let admin;
+    let tenant;
+    try {
+      ({ admin, tenant } = await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: { name: dto.complexName, slug },
+        });
 
-      await tx.clubInfo.create({
-        data: {
-          tenantId: tenant.id,
-          address: `${dto.complexName} — completá tu dirección`,
-          ...NEW_CLUB_DEFAULTS,
-        },
-      });
+        await tx.clubInfo.create({
+          data: {
+            tenantId: tenant.id,
+            address: `${dto.complexName} — completá tu dirección`,
+            ...NEW_CLUB_DEFAULTS,
+          },
+        });
 
-      const admin = await tx.user.create({
-        data: {
-          tenantId: tenant.id,
-          name: dto.adminName,
-          email: dto.adminEmail.toLowerCase(),
-          password: passwordHash,
-          phone: dto.adminPhone,
-          role: Role.ADMIN,
-          isEmailVerified: true, // el dueño del complejo se verifica solo
-        },
-      });
+        const admin = await tx.user.create({
+          data: {
+            tenantId: tenant.id,
+            name: dto.adminName,
+            email: dto.adminEmail.toLowerCase(),
+            password: passwordHash,
+            phone: dto.adminPhone,
+            role: Role.ADMIN,
+            isEmailVerified: true, // el dueño del complejo se verifica solo
+          },
+        });
 
-      return { admin, tenant };
-    });
+        return { admin, tenant };
+      }));
+    } catch (err) {
+      // Carrera: dos onboards simultáneos con el mismo slug pasan el chequeo
+      // previo y uno de los dos choca con el unique de la base (P2002).
+      // Devolvemos 409 coherente en vez de un 500.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException('Ya existe un complejo con ese identificador.');
+      }
+      throw err;
+    }
 
     const tokens = await this.signTokens(admin);
     return {

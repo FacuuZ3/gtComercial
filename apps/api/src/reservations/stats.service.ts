@@ -19,6 +19,7 @@
 import { Injectable } from '@nestjs/common';
 import { ReservationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { requireTenantId } from '../common/tenancy/tenant-context';
 
 /**
  * Horas operativas disponibles por día por cancha.
@@ -55,6 +56,9 @@ export class StatsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getStats(daysParam: number | undefined): Promise<StatsResponse> {
+    // Aislamiento multi-tenant: TODAS las métricas se calculan sobre los
+    // datos del complejo del admin autenticado, nunca globales.
+    const tenantId = requireTenantId();
     const days = daysParam ?? 30;
 
     // Ventana temporal [from, to].
@@ -68,13 +72,13 @@ export class StatsService {
     // -----------------------------------------------------------------------
     const [confirmed, cancelled, pending] = await Promise.all([
       this.prisma.reservation.count({
-        where: { status: ReservationStatus.CONFIRMED, startTime: { gte: from, lt: to } },
+        where: { tenantId, status: ReservationStatus.CONFIRMED, startTime: { gte: from, lt: to } },
       }),
       this.prisma.reservation.count({
-        where: { status: ReservationStatus.CANCELLED, startTime: { gte: from, lt: to } },
+        where: { tenantId, status: ReservationStatus.CANCELLED, startTime: { gte: from, lt: to } },
       }),
       this.prisma.reservation.count({
-        where: { status: ReservationStatus.PENDING, startTime: { gte: from, lt: to } },
+        where: { tenantId, status: ReservationStatus.PENDING, startTime: { gte: from, lt: to } },
       }),
     ]);
 
@@ -83,7 +87,7 @@ export class StatsService {
     // Cancelled NO suman a facturación / ocupación / heatmap.
     // -----------------------------------------------------------------------
     const confirmedRes = await this.prisma.reservation.findMany({
-      where: { status: ReservationStatus.CONFIRMED, startTime: { gte: from, lt: to } },
+      where: { tenantId, status: ReservationStatus.CONFIRMED, startTime: { gte: from, lt: to } },
       include: {
         user: { select: { id: true, name: true, email: true } },
         court: { select: { id: true, name: true, pricePerHour: true } },
@@ -145,7 +149,7 @@ export class StatsService {
     // Ocupación por cancha (incluye también canchas sin reservas)
     // -----------------------------------------------------------------------
     const courts = await this.prisma.court.findMany({
-      where: { isActive: true },
+      where: { tenantId, isActive: true },
       select: { id: true, name: true },
     });
     const hoursTotal = days * HOURS_PER_DAY_PER_COURT;

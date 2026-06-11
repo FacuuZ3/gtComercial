@@ -148,11 +148,12 @@ export class ReservationsController {
   @Post('run-reminders')
   @ApiOperation({
     summary:
-      'Disparar manualmente el envío de recordatorios (ADMIN). El cron lo ' +
-      'hace cada hora; este endpoint sirve para demos o pruebas inmediatas.',
+      'Disparar manualmente el envío de recordatorios del PROPIO complejo ' +
+      '(ADMIN). El cron global lo hace cada hora.',
   })
-  async runReminders() {
-    const sent = await this.reminderService.runOnce();
+  async runReminders(@CurrentUser() user: AuthUser) {
+    // Scopeado al complejo del admin: no puede disparar envíos de otros.
+    const sent = await this.reminderService.runOnce(user.tenantId);
     return { sent };
   }
 }
