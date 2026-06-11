@@ -124,7 +124,7 @@ export default function OnboardingPage() {
               id="slug"
               label="Identificador (subdominio)"
               error={form.formState.errors.slug?.message}
-              hint={slug ? `Tu dirección será: ${slug}.reserva.app` : 'Solo minúsculas, números y guiones.'}
+              hint={slug ? `Tu complejo tendrá su propia dirección web: ${slug}.tudominio` : 'Solo minúsculas, números y guiones.'}
             >
               <Input
                 id="slug"
